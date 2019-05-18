@@ -15,6 +15,7 @@ import (
 	"strings"
 	"time"
 	"os"
+	"httputil"
 
 	"github.com/pkg/errors"
 	"golang.org/x/time/rate"
@@ -292,7 +293,8 @@ func (api *API) request(ctx context.Context, method, uri string, reqBody io.Read
 	if req.Header.Get("Content-Type") == "" {
 		req.Header.Set("Content-Type", "application/json")
 	}
-
+	
+	api.logger.Println(httputil.DumpRequest(req))
 	resp, err := api.httpClient.Do(req)
 	if err != nil {
 		return nil, errors.Wrap(err, "HTTP request failed")
