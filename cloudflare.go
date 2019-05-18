@@ -47,7 +47,6 @@ type API struct {
 
 // newClient provides shared logic for New and NewWithUserServiceKey
 func newClient(opts ...Option) (*API, error) {
-	silentLogger := log.New(ioutil.Discard, "", log.LstdFlags)
 	screamingLogger := log.New(os.Stdout, "CF-API: ", log.LstdFlags)
 
 	api := &API{
