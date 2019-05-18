@@ -294,7 +294,7 @@ func (api *API) request(ctx context.Context, method, uri string, reqBody io.Read
 		req.Header.Set("Content-Type", "application/json")
 	}
 	
-	api.logger.Println(httputil.DumpRequest(req))
+	api.logger.Println(httputil.DumpRequest(req, true))
 	resp, err := api.httpClient.Do(req)
 	if err != nil {
 		return nil, errors.Wrap(err, "HTTP request failed")
