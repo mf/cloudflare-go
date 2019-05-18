@@ -13,13 +13,18 @@ import (
 )
 
 // writeTable outputs tabular data to stdout.
-func writeTable(data [][]string, cols ...string) {
-	table := tablewriter.NewWriter(os.Stdout)
-	table.SetHeader(cols)
-	table.SetBorder(false)
-	table.AppendBulk(data)
+func writeTable(data [][]string, outputStyle string, cols ...string, ) {
+	if outputStyle == 'json' {
+		b, err := json.Marshal(data)
+		fmt.Println(b)
+	} else {
+		table := tablewriter.NewWriter(os.Stdout)
+		table.SetHeader(cols)
+		table.SetBorder(false)
+		table.AppendBulk(data)
 
-	table.Render()
+		table.Render()
+	}
 }
 
 func checkEnv() error {
