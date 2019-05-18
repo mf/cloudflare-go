@@ -15,7 +15,7 @@ import (
 	"strings"
 	"time"
 	"os"
-	"httputil"
+	"net/http/httputil"
 
 	"github.com/pkg/errors"
 	"golang.org/x/time/rate"
