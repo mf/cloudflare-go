@@ -48,7 +48,7 @@ type API struct {
 func newClient(opts ...Option) (*API, error) {
 	buf    bytes.Buffer
 	silentLogger := log.New(ioutil.Discard, "", log.LstdFlags)
-	screamingLogger := log.New(os.Stdout, "CF-API: ", log.LstFlags)
+	screamingLogger := log.New(os.Stdout, "CF-API: ", log.LstdFlags)
 
 	api := &API{
 		BaseURL:     apiURL,
