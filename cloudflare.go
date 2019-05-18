@@ -46,7 +46,9 @@ type API struct {
 
 // newClient provides shared logic for New and NewWithUserServiceKey
 func newClient(opts ...Option) (*API, error) {
+	buf    bytes.Buffer
 	silentLogger := log.New(ioutil.Discard, "", log.LstdFlags)
+	screamingLogger := log.New(os.Stdout, "CF-API: ", log.LstFlags)
 
 	api := &API{
 		BaseURL:     apiURL,
@@ -57,7 +59,7 @@ func newClient(opts ...Option) (*API, error) {
 			MinRetryDelay: time.Duration(1) * time.Second,
 			MaxRetryDelay: time.Duration(30) * time.Second,
 		},
-		logger: silentLogger,
+		logger: screamingLogger,
 	}
 
 	err := api.parseOptions(opts...)
