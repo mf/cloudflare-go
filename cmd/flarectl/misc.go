@@ -5,7 +5,6 @@ import (
 	"log"
 	"os"
 	"strings"
-
 	"github.com/cloudflare/cloudflare-go"
 	"github.com/codegangsta/cli"
 	"github.com/olekukonko/tablewriter"
@@ -13,8 +12,8 @@ import (
 )
 
 // writeTable outputs tabular data to stdout.
-func writeTable(data [][]string, outputStyle string, cols ...string, ) {
-	if outputStyle == 'json' {
+func writeTable(data [][]string, outputStyle string, cols ...string) {
+	if outputStyle == "json" {
 		b, err := json.Marshal(data)
 		fmt.Println(b)
 	} else {
