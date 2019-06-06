@@ -12,7 +12,8 @@ import (
 )
 
 // writeTable outputs tabular data to stdout.
-func writeTable(data [][]string, outputStyle string, cols ...string) {
+func writeTable(data [][]string, cols ...string) {
+	outputStyle = ""
 	if outputStyle == "json" {
 		b, err := json.Marshal(data)
 		fmt.Println(b)
