@@ -6,7 +6,7 @@ import (
 	"strconv"
 
 	"github.com/cloudflare/cloudflare-go"
-	"github.com/codegangsta/cli"
+	"github.com/urfave/cli"
 )
 
 func formatUserAgentRule(rule cloudflare.UserAgentRule) []string {
@@ -20,11 +20,6 @@ func formatUserAgentRule(rule cloudflare.UserAgentRule) []string {
 }
 
 func userAgentCreate(c *cli.Context) {
-	if err := checkEnv(); err != nil {
-		fmt.Fprintln(os.Stderr, err)
-		return
-	}
-
 	if err := checkFlags(c, "zone", "mode", "value"); err != nil {
 		fmt.Println(err)
 		return
@@ -56,15 +51,10 @@ func userAgentCreate(c *cli.Context) {
 		formatUserAgentRule(resp.Result),
 	}
 
-	writeTable(output, "ID", "Description", "Mode", "Value", "Paused")
+	writeTable(c, output, "ID", "Description", "Mode", "Value", "Paused")
 }
 
 func userAgentUpdate(c *cli.Context) {
-	if err := checkEnv(); err != nil {
-		fmt.Println(err)
-		return
-	}
-
 	if err := checkFlags(c, "zone", "id", "mode", "value"); err != nil {
 		return
 	}
@@ -95,15 +85,10 @@ func userAgentUpdate(c *cli.Context) {
 		formatUserAgentRule(resp.Result),
 	}
 
-	writeTable(output, "ID", "Description", "Mode", "Value", "Paused")
+	writeTable(c, output, "ID", "Description", "Mode", "Value", "Paused")
 }
 
 func userAgentDelete(c *cli.Context) {
-	if err := checkEnv(); err != nil {
-		fmt.Println(err)
-		return
-	}
-
 	if err := checkFlags(c, "zone", "id"); err != nil {
 		return
 	}
@@ -124,15 +109,10 @@ func userAgentDelete(c *cli.Context) {
 		formatUserAgentRule(resp.Result),
 	}
 
-	writeTable(output, "ID", "Description", "Mode", "Value", "Paused")
+	writeTable(c, output, "ID", "Description", "Mode", "Value", "Paused")
 }
 
 func userAgentList(c *cli.Context) {
-	if err := checkEnv(); err != nil {
-		fmt.Println(err)
-		return
-	}
-
 	if err := checkFlags(c, "zone", "page"); err != nil {
 		return
 	}
@@ -154,5 +134,5 @@ func userAgentList(c *cli.Context) {
 		output = append(output, formatUserAgentRule(rule))
 	}
 
-	writeTable(output, "ID", "Description", "Mode", "Value", "Paused")
+	writeTable(c, output, "ID", "Description", "Mode", "Value", "Paused")
 }

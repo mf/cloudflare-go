@@ -3,8 +3,8 @@ package main
 import (
 	"os"
 
-	"github.com/cloudflare/cloudflare-go"
-	"github.com/codegangsta/cli"
+	cloudflare "github.com/cloudflare/cloudflare-go"
+	"github.com/urfave/cli"
 )
 
 var api *cloudflare.API
@@ -14,6 +14,18 @@ func main() {
 	app.Name = "flarectl"
 	app.Usage = "Cloudflare CLI"
 	app.Version = "2017.10.0"
+	app.Flags = []cli.Flag{
+		cli.StringFlag{
+			Name:   "account-id",
+			Usage:  "Optional account ID",
+			Value:  "",
+			EnvVar: "CF_ACCOUNT_ID",
+		},
+		cli.BoolFlag{
+			Name:  "json",
+			Usage: "show output as JSON instead of as a table",
+		},
+	}
 	app.Commands = []cli.Command{
 		{
 			Name:    "ips",
@@ -36,6 +48,7 @@ func main() {
 			Name:    "user",
 			Aliases: []string{"u"},
 			Usage:   "User information",
+			Before:  initializeAPI,
 			Subcommands: []cli.Command{
 				{
 					Name:    "info",
@@ -56,6 +69,7 @@ func main() {
 			Name:    "zone",
 			Aliases: []string{"z"},
 			Usage:   "Zone information",
+			Before:  initializeAPI,
 			Subcommands: []cli.Command{
 				{
 					Name:    "list",
@@ -78,8 +92,19 @@ func main() {
 							Usage: "automatically fetch DNS records",
 						},
 						cli.StringFlag{
-							Name:  "org-id",
-							Usage: "organization ID",
+							Name:  "account-id",
+							Usage: "account ID",
+						},
+					},
+				},
+				{
+					Name:   "delete",
+					Action: zoneDelete,
+					Usage:  "Delete a zone",
+					Flags: []cli.Flag{
+						cli.StringFlag{
+							Name:  "zone",
+							Usage: "zone name",
 						},
 					},
 				},
@@ -103,6 +128,30 @@ func main() {
 						cli.StringFlag{
 							Name:  "zone",
 							Usage: "zone name",
+						},
+					},
+				},
+				{
+					Name:    "lockdown",
+					Aliases: []string{"lo"},
+					Action:  zoneCreateLockdown,
+					Usage:   "Lockdown a zone based on config",
+					Flags: []cli.Flag{
+						cli.StringFlag{
+							Name:  "zone",
+							Usage: "zone name",
+						},
+						cli.StringSliceFlag{
+							Name:  "urls",
+							Usage: "a list of [exact] URLs to lockdown",
+						},
+						cli.StringSliceFlag{
+							Name:  "targets",
+							Usage: "a list of targets type",
+						},
+						cli.StringSliceFlag{
+							Name:  "values",
+							Usage: "a list of values such as ip, ip_range etc.",
 						},
 					},
 				},
@@ -175,6 +224,18 @@ func main() {
 					Action:  zoneKeyless,
 					Usage:   "Keyless SSL for a zone",
 				},
+				{
+					Name:    "export",
+					Aliases: []string{"x"},
+					Action:  zoneExport,
+					Usage:   "Export DNS records for a zone",
+					Flags: []cli.Flag{
+						cli.StringFlag{
+							Name:  "zone",
+							Usage: "zone name",
+						},
+					},
+				},
 			},
 		},
 
@@ -182,6 +243,7 @@ func main() {
 			Name:    "dns",
 			Aliases: []string{"d"},
 			Usage:   "DNS records",
+			Before:  initializeAPI,
 			Subcommands: []cli.Command{
 				{
 					Name:    "list",
@@ -196,6 +258,10 @@ func main() {
 						cli.StringFlag{
 							Name:  "zone",
 							Usage: "zone name",
+						},
+						cli.StringFlag{
+							Name:  "type",
+							Usage: "record type",
 						},
 						cli.StringFlag{
 							Name:  "name",
@@ -261,6 +327,10 @@ func main() {
 						cli.StringFlag{
 							Name:  "content",
 							Usage: "record content",
+						},
+						cli.StringFlag{
+							Name:  "type",
+							Usage: "record type",
 						},
 						cli.IntFlag{
 							Name:  "ttl",
@@ -328,6 +398,7 @@ func main() {
 			Name:    "user-agents",
 			Aliases: []string{"ua"},
 			Usage:   "User-Agent blocking",
+			Before:  initializeAPI,
 			Subcommands: []cli.Command{
 				{
 					Name:    "list",
@@ -427,6 +498,7 @@ func main() {
 			Name:    "pagerules",
 			Aliases: []string{"p"},
 			Usage:   "Page Rules",
+			Before:  initializeAPI,
 			Subcommands: []cli.Command{
 				{
 					Name:    "list",
@@ -447,6 +519,7 @@ func main() {
 			Name:    "railgun",
 			Aliases: []string{"r"},
 			Usage:   "Railgun information",
+			Before:  initializeAPI,
 			Action:  railgun,
 		},
 
@@ -454,6 +527,7 @@ func main() {
 			Name:    "firewall",
 			Aliases: []string{"f"},
 			Usage:   "Firewall",
+			Before:  initializeAPI,
 			Subcommands: []cli.Command{
 				{
 					Name:    "rules",
@@ -471,8 +545,8 @@ func main() {
 									Usage: "zone name",
 								},
 								cli.StringFlag{
-									Name:  "organization",
-									Usage: "organization name",
+									Name:  "account",
+									Usage: "account name",
 								},
 								cli.StringFlag{
 									Name:  "value",
@@ -504,8 +578,8 @@ func main() {
 									Usage: "zone name",
 								},
 								cli.StringFlag{
-									Name:  "organization",
-									Usage: "organization name",
+									Name:  "account",
+									Usage: "account name",
 								},
 								cli.StringFlag{
 									Name:  "value",
@@ -536,8 +610,8 @@ func main() {
 									Usage: "zone name",
 								},
 								cli.StringFlag{
-									Name:  "organization",
-									Usage: "organization name",
+									Name:  "account",
+									Usage: "account name",
 								},
 								cli.StringFlag{
 									Name:  "mode",
@@ -560,8 +634,8 @@ func main() {
 									Usage: "zone name",
 								},
 								cli.StringFlag{
-									Name:  "organization",
-									Usage: "organization name",
+									Name:  "account",
+									Usage: "account name",
 								},
 								cli.StringFlag{
 									Name:  "value",
@@ -592,8 +666,8 @@ func main() {
 									Usage: "zone name",
 								},
 								cli.StringFlag{
-									Name:  "organization",
-									Usage: "organization name",
+									Name:  "account",
+									Usage: "account name",
 								},
 							},
 						},
@@ -602,5 +676,9 @@ func main() {
 			},
 		},
 	}
-	app.Run(os.Args)
+	err := app.Run(os.Args)
+	if err != nil {
+		os.Exit(1)
+	}
+	os.Exit(0)
 }

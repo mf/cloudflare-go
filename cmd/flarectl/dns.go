@@ -7,7 +7,7 @@ import (
 	"strings"
 
 	"github.com/cloudflare/cloudflare-go"
-	"github.com/codegangsta/cli"
+	"github.com/urfave/cli"
 )
 
 func formatDNSRecord(record cloudflare.DNSRecord) []string {
@@ -24,10 +24,6 @@ func formatDNSRecord(record cloudflare.DNSRecord) []string {
 }
 
 func dnsCreate(c *cli.Context) {
-	if err := checkEnv(); err != nil {
-		fmt.Println(err)
-		return
-	}
 	if err := checkFlags(c, "zone", "name", "type", "content"); err != nil {
 		return
 	}
@@ -61,14 +57,10 @@ func dnsCreate(c *cli.Context) {
 		formatDNSRecord(resp.Result),
 	}
 
-	writeTable(output, "ID", "Name", "Type", "Content", "TTL", "Proxiable", "Proxy", "Locked")
+	writeTable(c, output, "ID", "Name", "Type", "Content", "TTL", "Proxiable", "Proxy", "Locked")
 }
 
 func dnsCreateOrUpdate(c *cli.Context) {
-	if err := checkEnv(); err != nil {
-		fmt.Println(err)
-		return
-	}
 	if err := checkFlags(c, "zone", "name", "type", "content"); err != nil {
 		fmt.Println(err)
 		return
@@ -137,14 +129,10 @@ func dnsCreateOrUpdate(c *cli.Context) {
 		formatDNSRecord(resp.Result),
 	}
 
-	writeTable(output, "ID", "Name", "Type", "Content", "TTL", "Proxiable", "Proxy", "Locked")
+	writeTable(c, output, "ID", "Name", "Type", "Content", "TTL", "Proxiable", "Proxy", "Locked")
 }
 
 func dnsUpdate(c *cli.Context) {
-	if err := checkEnv(); err != nil {
-		fmt.Println(err)
-		return
-	}
 	if err := checkFlags(c, "zone", "id"); err != nil {
 		fmt.Println(err)
 		return
@@ -152,6 +140,7 @@ func dnsUpdate(c *cli.Context) {
 	zone := c.String("zone")
 	recordID := c.String("id")
 	name := c.String("name")
+	rtype := c.String("type")
 	content := c.String("content")
 	ttl := c.Int("ttl")
 	proxy := c.Bool("proxy")
@@ -165,6 +154,7 @@ func dnsUpdate(c *cli.Context) {
 	record := cloudflare.DNSRecord{
 		ID:      recordID,
 		Name:    name,
+		Type:    strings.ToUpper(rtype),
 		Content: content,
 		TTL:     ttl,
 		Proxied: proxy,
@@ -177,10 +167,6 @@ func dnsUpdate(c *cli.Context) {
 }
 
 func dnsDelete(c *cli.Context) {
-	if err := checkEnv(); err != nil {
-		fmt.Println(err)
-		return
-	}
 	if err := checkFlags(c, "zone", "id"); err != nil {
 		fmt.Println(err)
 		return

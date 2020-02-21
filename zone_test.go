@@ -800,7 +800,7 @@ func TestCreateZoneFullSetup(t *testing.T) {
 	actual, err := client.CreateZone(
 		"example.com",
 		false,
-		Organization{ID: "01a7362d577a6c3019a474fd6f485823"},
+		Account{ID: "01a7362d577a6c3019a474fd6f485823"},
 		"full",
 	)
 
@@ -883,11 +883,216 @@ func TestCreateZonePartialSetup(t *testing.T) {
 	actual, err := client.CreateZone(
 		"example.com",
 		false,
-		Organization{ID: "01a7362d577a6c3019a474fd6f485823"},
+		Account{ID: "01a7362d577a6c3019a474fd6f485823"},
 		"partial",
 	)
 
 	if assert.NoError(t, err) {
 		assert.Equal(t, expectedPartialZoneSetup, actual)
+	}
+}
+
+func TestFallbackOrigin_FallbackOrigin(t *testing.T) {
+	setup()
+	defer teardown()
+
+	mux.HandleFunc("/zones/foo/fallback_origin", func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, "GET", r.Method, "Expected method 'GET', got %s", r.Method)
+
+		w.Header().Set("content-type", "application/json")
+		fmt.Fprintf(w, `{
+"success": true,
+"errors": [],
+"messages": [],
+"result": {
+    "id": "fallback_origin",
+    "value": "app.example.com",
+    "editable": true
+  }
+}`)
+	})
+
+	fallbackOrigin, err := client.FallbackOrigin("foo")
+
+	want := FallbackOrigin{
+		ID:    "fallback_origin",
+		Value: "app.example.com",
+	}
+
+	if assert.NoError(t, err) {
+		assert.Equal(t, want, fallbackOrigin)
+	}
+}
+
+func TestFallbackOrigin_UpdateFallbackOrigin(t *testing.T) {
+	setup()
+	defer teardown()
+
+	mux.HandleFunc("/zones/foo/fallback_origin", func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, "PATCH", r.Method, "Expected method 'PATCH', got %s", r.Method)
+
+		w.Header().Set("content-type", "application/json")
+		w.WriteHeader(http.StatusCreated)
+		fmt.Fprintf(w, `
+{
+  "success": true,
+  "errors": [],
+  "messages": [],
+  "result": {
+    "id": "fallback_origin",
+    "value": "app.example.com",
+		"editable": true
+  }
+}`)
+	})
+
+	response, err := client.UpdateFallbackOrigin("foo", FallbackOrigin{Value: "app.example.com"})
+
+	want := &FallbackOriginResponse{
+		Result: FallbackOrigin{
+			ID:    "fallback_origin",
+			Value: "app.example.com",
+		},
+		Response: Response{Success: true, Errors: []ResponseInfo{}, Messages: []ResponseInfo{}},
+	}
+
+	if assert.NoError(t, err) {
+		assert.Equal(t, want, response)
+	}
+}
+
+func Test_normalizeZoneName(t *testing.T) {
+	tests := []struct {
+		name     string
+		zone     string
+		expected string
+	}{
+		{
+			name:     "unicode stays unicode",
+			zone:     "ünì¢øðe.tld",
+			expected: "ünì¢øðe.tld",
+		}, {
+			name:     "valid punycode is normalized to unicode",
+			zone:     "xn--ne-7ca90ava1cya.tld",
+			expected: "ünì¢øðe.tld",
+		}, {
+			name:     "valid punycode in second label",
+			zone:     "example.xn--j6w193g",
+			expected: "example.香港",
+		}, {
+			name:     "invalid punycode is returned without change",
+			zone:     "xn-invalid.xn-invalid-tld",
+			expected: "xn-invalid.xn-invalid-tld",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			actual := normalizeZoneName(tt.zone)
+			assert.Equal(t, tt.expected, actual)
+		})
+	}
+}
+
+func TestZonePartialHasVerificationKey(t *testing.T) {
+	setup()
+	defer teardown()
+
+	handler := func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, "GET", r.Method, "Expected method 'GET', got %s", r.Method)
+
+		w.Header().Set("content-type", "application/json")
+		// JSON data from: https://api.cloudflare.com/#zone-zone-details (plus an undocumented field verification_key from curl to API)
+		fmt.Fprintf(w, `{
+  "result": {
+    "id": "foo",
+    "name": "bar",
+    "status": "active",
+    "paused": false,
+    "type": "partial",
+    "development_mode": 0,
+    "verification_key": "foo-bar",
+    "original_name_servers": ["a","b","c","d"],
+    "original_registrar": null,
+    "original_dnshost": null,
+    "modified_on": "2019-09-04T15:11:43.409805Z",
+    "created_on": "2018-12-06T14:33:38.410126Z",
+    "activated_on": "2018-12-06T14:34:39.274528Z",
+    "meta": {
+      "step": 4,
+      "wildcard_proxiable": true,
+      "custom_certificate_quota": 1,
+      "page_rule_quota": 100,
+      "phishing_detected": false,
+      "multiple_railguns_allowed": false
+    },
+    "owner": {
+      "id": "bbbbbbbbbbbbbbbbbbbbbbbb",
+      "type": "organization",
+      "name": "OrgName"
+    },
+    "account": {
+      "id": "aaaaaaaaaaaaaaaaaaaaaaaa",
+      "name": "AccountName"
+    },
+    "permissions": [
+      "#access:edit",
+      "#access:read",
+      "#analytics:read",
+      "#app:edit",
+      "#auditlogs:read",
+      "#billing:read",
+      "#cache_purge:edit",
+      "#dns_records:edit",
+      "#dns_records:read",
+      "#lb:edit",
+      "#lb:read",
+      "#legal:read",
+      "#logs:edit",
+      "#logs:read",
+      "#member:read",
+      "#organization:edit",
+      "#organization:read",
+      "#ssl:edit",
+      "#ssl:read",
+      "#stream:edit",
+      "#stream:read",
+      "#subscription:edit",
+      "#subscription:read",
+      "#waf:edit",
+      "#waf:read",
+      "#webhooks:edit",
+      "#webhooks:read",
+      "#worker:edit",
+      "#worker:read",
+      "#zone:edit",
+      "#zone:read",
+      "#zone_settings:edit",
+      "#zone_settings:read"
+    ],
+    "plan": {
+      "id": "94f3b7b768b0458b56d2cac4fe5ec0f9",
+      "name": "Enterprise Website",
+      "price": 0,
+      "currency": "USD",
+      "frequency": "monthly",
+      "is_subscribed": true,
+      "can_subscribe": true,
+      "legacy_id": "enterprise",
+      "legacy_discount": false,
+      "externally_managed": true
+    }
+  },
+  "success": true,
+  "errors": [],
+  "messages": []
+}`)
+	}
+
+	mux.HandleFunc("/zones/foo", handler)
+
+	z, err := client.ZoneDetails("foo")
+	if assert.NoError(t, err) {
+		assert.NotEmpty(t, z.VerificationKey)
+		assert.Equal(t, z.VerificationKey,"foo-bar")
 	}
 }

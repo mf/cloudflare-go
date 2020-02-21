@@ -1,49 +1,83 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
-	"log"
 	"os"
 	"strings"
-	"github.com/cloudflare/cloudflare-go"
-	"github.com/codegangsta/cli"
+
+	cloudflare "github.com/cloudflare/cloudflare-go"
 	"github.com/olekukonko/tablewriter"
 	"github.com/pkg/errors"
+	"github.com/urfave/cli"
 )
 
-// writeTable outputs tabular data to stdout.
-func writeTable(data [][]string, cols ...string) {
-	outputStyle = ""
-	if outputStyle == "json" {
-		b, err := json.Marshal(data)
-		fmt.Println(b)
-	} else {
-		table := tablewriter.NewWriter(os.Stdout)
-		table.SetHeader(cols)
-		table.SetBorder(false)
-		table.AppendBulk(data)
+func initializeAPI(c *cli.Context) error {
+	apiKey := os.Getenv("CF_API_KEY")
+	if apiKey == "" {
+		err := errors.New("No CF_API_KEY environment set")
+		fmt.Fprintln(os.Stderr, err)
+		return err
+	}
+
+	apiEmail := os.Getenv("CF_API_EMAIL")
+	if apiEmail == "" {
+		err := errors.New("No CF_API_EMAIL environment set")
+		fmt.Fprintln(os.Stderr, err)
+		return err
+	}
+
+	// Be aware the following code sets the global package `api` variable
+	var err error
+	api, err = cloudflare.New(apiKey, apiEmail)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "cloudflare api: %s", err)
+		return err
+	}
+
+	if c.IsSet("accountid") {
+		cloudflare.UsingAccount(c.String("accountid"))(api)
+	}
+
+	return nil
+}
+
+// writeTableTabular outputs tabular data to STDOUT
+func writeTableTabular(data [][]string, cols ...string) {
+	table := tablewriter.NewWriter(os.Stdout)
+	table.SetHeader(cols)
+	table.SetBorder(false)
+	table.AppendBulk(data)
 
 		table.Render()
 	}
 }
 
-func checkEnv() error {
-	if api == nil {
-		var err error
-		api, err = cloudflare.New(os.Getenv("CF_API_KEY"), os.Getenv("CF_API_EMAIL"))
-		if err != nil {
-			log.Fatal(err)
+// writeTableJSON outputs JSON data to STDOUT
+func writeTableJSON(data [][]string, cols ...string) {
+	mappedData := make([]map[string]string, 0)
+	for i := range data {
+		rowData := make(map[string]string)
+		for j := range data[i] {
+			rowData[cols[j]] = data[i][j]
 		}
+		mappedData = append(mappedData, rowData)
 	}
+	jsonData, err := json.Marshal(mappedData)
+	if err != nil {
+		fmt.Println(err)
+		return
+	}
+	fmt.Println(string(jsonData))
+}
 
-	if api.APIKey == "" {
-		return errors.New("API key not defined")
+// writeTable outputs JSON or tabular data to STDOUT
+func writeTable(c *cli.Context, data [][]string, cols ...string) {
+	if c.GlobalBool("json") {
+		writeTableJSON(data, cols...)
+	} else {
+		writeTableTabular(data, cols...)
 	}
-	if api.APIEmail == "" {
-		return errors.New("API email not defined")
-	}
-
-	return nil
 }
 
 // Utility function to check if CLI flags were given.
@@ -94,11 +128,7 @@ func _getIps(ipType string, showMsgType bool) {
 	}
 }
 
-func userInfo(*cli.Context) {
-	if err := checkEnv(); err != nil {
-		fmt.Println(err)
-		return
-	}
+func userInfo(c *cli.Context) {
 	user, err := api.UserDetails()
 	if err != nil {
 		fmt.Println(err)
@@ -112,17 +142,13 @@ func userInfo(*cli.Context) {
 		user.FirstName + " " + user.LastName,
 		fmt.Sprintf("%t", user.TwoFA),
 	})
-	writeTable(output, "ID", "Email", "Username", "Name", "2FA")
+	writeTable(c, output, "ID", "Email", "Username", "Name", "2FA")
 }
 
 func userUpdate(*cli.Context) {
 }
 
 func pageRules(c *cli.Context) {
-	if err := checkEnv(); err != nil {
-		fmt.Println(err)
-		return
-	}
 	if err := checkFlags(c, "zone"); err != nil {
 		return
 	}

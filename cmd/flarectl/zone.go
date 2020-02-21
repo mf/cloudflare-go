@@ -5,8 +5,8 @@ import (
 	"os"
 	"strings"
 
-	"github.com/cloudflare/cloudflare-go"
-	"github.com/codegangsta/cli"
+	cloudflare "github.com/cloudflare/cloudflare-go"
+	"github.com/urfave/cli"
 )
 
 func zoneCerts(*cli.Context) {
@@ -19,27 +19,23 @@ func zoneRailgun(*cli.Context) {
 }
 
 func zoneCreate(c *cli.Context) {
-	if err := checkEnv(); err != nil {
-		fmt.Println(err)
-		return
-	}
 	if err := checkFlags(c, "zone"); err != nil {
 		return
 	}
 	zone := c.String("zone")
 	jumpstart := c.Bool("jumpstart")
-	orgID := c.String("org-id")
+	accountID := c.String("account-id")
 	zoneType := c.String("type")
-	var org cloudflare.Organization
-	if orgID != "" {
-		org.ID = orgID
+	var account cloudflare.Account
+	if accountID != "" {
+		account.ID = accountID
 	}
 
 	if zoneType != "partial" {
 		zoneType = "full"
 	}
 
-	_, err := api.CreateZone(zone, jumpstart, org, zoneType)
+	_, err := api.CreateZone(zone, jumpstart, account, zoneType)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, fmt.Sprintf("%s", err))
 		return
@@ -47,10 +43,6 @@ func zoneCreate(c *cli.Context) {
 }
 
 func zoneCheck(c *cli.Context) {
-	if err := checkEnv(); err != nil {
-		fmt.Println(err)
-		return
-	}
 	if err := checkFlags(c, "zone"); err != nil {
 		return
 	}
@@ -71,10 +63,6 @@ func zoneCheck(c *cli.Context) {
 }
 
 func zoneList(c *cli.Context) {
-	if err := checkEnv(); err != nil {
-		fmt.Println(err)
-		return
-	}
 	zones, err := api.ListZones()
 	if err != nil {
 		fmt.Println(err)
@@ -89,14 +77,69 @@ func zoneList(c *cli.Context) {
 			z.Status,
 		})
 	}
-	writeTable(output, "ID", "Name", "Plan", "Status")
+	writeTable(c, output, "ID", "Name", "Plan", "Status")
 }
 
-func zoneInfo(c *cli.Context) {
-	if err := checkEnv(); err != nil {
+func zoneDelete(c *cli.Context) {
+	if err := checkFlags(c, "zone"); err != nil {
+		return
+	}
+
+	zoneID, err := api.ZoneIDByName(c.String("zone"))
+	if err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		return
+	}
+
+	_, err = api.DeleteZone(zoneID)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, fmt.Sprintf("%s", err))
+		return
+	}
+}
+
+func zoneCreateLockdown(c *cli.Context) {
+	if err := checkFlags(c, "zone", "urls", "targets", "values"); err != nil {
+		return
+	}
+	zoneID, err := api.ZoneIDByName(c.String("zone"))
+	if err != nil {
 		fmt.Println(err)
 		return
 	}
+	targets := c.StringSlice("targets")
+	values := c.StringSlice("values")
+	if len(targets) != len(values) {
+		cli.ShowCommandHelp(c, "targets and values does not match")
+		return
+	}
+	var zonelockdownconfigs = []cloudflare.ZoneLockdownConfig{}
+	for index := 0; index < len(targets); index++ {
+		zonelockdownconfigs = append(zonelockdownconfigs, cloudflare.ZoneLockdownConfig{
+			Target: c.StringSlice("targets")[index],
+			Value:  c.StringSlice("values")[index],
+		})
+	}
+	lockdown := cloudflare.ZoneLockdown{
+		Description:    c.String("description"),
+		URLs:           c.StringSlice("urls"),
+		Configurations: zonelockdownconfigs,
+	}
+
+	var resp *cloudflare.ZoneLockdownResponse
+
+	resp, err = api.CreateZoneLockdown(zoneID, lockdown)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, "Error creating ZONE lock down: ", err)
+		return
+	}
+	output := make([][]string, 0, 1)
+	output = append(output, formatLockdownResponse(resp))
+
+	writeTable(c, output, "ID")
+}
+
+func zoneInfo(c *cli.Context) {
 	var zone string
 	if len(c.Args()) > 0 {
 		zone = c.Args()[0]
@@ -129,7 +172,7 @@ func zoneInfo(c *cli.Context) {
 			z.Type,
 		})
 	}
-	writeTable(output, "ID", "Zone", "Plan", "Status", "Name Servers", "Paused", "Type")
+	writeTable(c, output, "ID", "Zone", "Plan", "Status", "Name Servers", "Paused", "Type")
 }
 
 func zonePlan(*cli.Context) {
@@ -139,12 +182,6 @@ func zoneSettings(*cli.Context) {
 }
 
 func zoneCachePurge(c *cli.Context) {
-	if err := checkEnv(); err != nil {
-		fmt.Println(err)
-		cli.ShowSubcommandHelp(c)
-		return
-	}
-
 	if err := checkFlags(c, "zone"); err != nil {
 		cli.ShowSubcommandHelp(c)
 		return
@@ -195,14 +232,10 @@ func zoneCachePurge(c *cli.Context) {
 	output := make([][]string, 0, 1)
 	output = append(output, formatCacheResponse(resp))
 
-	writeTable(output, "ID")
+	writeTable(c, output, "ID")
 }
 
 func zoneRecords(c *cli.Context) {
-	if err := checkEnv(); err != nil {
-		fmt.Println(err)
-		return
-	}
 	var zone string
 	if len(c.Args()) > 0 {
 		zone = c.Args()[0]
@@ -230,6 +263,9 @@ func zoneRecords(c *cli.Context) {
 		}
 		records = append(records, rec)
 	} else {
+		if c.String("type") != "" {
+			rr.Type = c.String("type")
+		}
 		if c.String("name") != "" {
 			rr.Name = c.String("name")
 		}
@@ -265,11 +301,42 @@ func zoneRecords(c *cli.Context) {
 			fmt.Sprintf("%d", r.TTL),
 		})
 	}
-	writeTable(output, "ID", "Type", "Name", "Content", "Proxied", "TTL")
+	writeTable(c, output, "ID", "Type", "Name", "Content", "Proxied", "TTL")
 }
 
 func formatCacheResponse(resp cloudflare.PurgeCacheResponse) []string {
 	return []string{
 		resp.Result.ID,
 	}
+}
+
+func formatLockdownResponse(resp *cloudflare.ZoneLockdownResponse) []string {
+	return []string{
+		resp.Result.ID,
+	}
+}
+
+func zoneExport(c *cli.Context) {
+	var zone string
+	if len(c.Args()) > 0 {
+		zone = c.Args()[0]
+	} else if c.String("zone") != "" {
+		zone = c.String("zone")
+	} else {
+		cli.ShowSubcommandHelp(c)
+		return
+	}
+
+	zoneID, err := api.ZoneIDByName(zone)
+	if err != nil {
+		fmt.Println(err)
+		return
+	}
+
+	res, err := api.ZoneExport(zoneID)
+	if err != nil {
+		fmt.Println(err)
+		return
+	}
+	fmt.Print(res)
 }
